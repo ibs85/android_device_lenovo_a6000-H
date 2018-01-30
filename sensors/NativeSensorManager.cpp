@@ -916,7 +916,7 @@ int NativeSensorManager::activate(int handle, int enable)
 		return -EINVAL;
 	}
 
-	list->enable = enable;
+	//list->enable = enable;
 
 	/* one shot sensors don't act as base sensors */
 	if (list->sensor->flags & SENSOR_FLAG_ONE_SHOT_MODE)
@@ -926,8 +926,7 @@ int NativeSensorManager::activate(int handle, int enable)
 	list_for_each(node, &list->dep_list) {
 		item = node_to_item(node, struct SensorRefMap, list);
 		if (enable) {
-			registerListener(item->ctx, list);
-
+			
 #if defined(SENSORS_DEVICE_API_VERSION_1_3)
 			/* HAL 1.3 already set listener's delay and latency
 			 * Sync it right now to make it take effect.
@@ -937,7 +936,10 @@ int NativeSensorManager::activate(int handle, int enable)
 
 			/* Enable the background sensor and register a listener on it. */
 			ALOGD("%s calling driver enable", item->ctx->sensor->name);
-			item->ctx->driver->enable(item->ctx->sensor->handle, 1);
+			err = item->ctx->driver->enable(item->ctx->sensor->handle, 1);
+			if (!err) {
+				registerListener(item->ctx, list);
+  			}
 			syncDelay(item->ctx->sensor->handle);
 
 		} else {
@@ -970,7 +972,7 @@ int NativeSensorManager::activate(int handle, int enable)
 		ALOGD("%s calling driver %s", list->sensor->name, enable ? "enable" : "disable");
 		list->driver->enable(handle, enable);
 	}
-
+    list->enable = enable;
 	return err;
 }
 
