@@ -459,7 +459,7 @@ int NativeSensorManager::getDataInfo() {
 				has_proximity = 1;
 #if defined(SENSORS_DEVICE_API_VERSION_1_3)
 				/* reporting mode fix up */
-				list->sensor->flags |= SENSOR_FLAG_WAKE_UP | SENSOR_FLAG_ON_CHANGE_MODE;
+				list->sensor->flags |= SENSOR_FLAG_ON_CHANGE_MODE;
 #endif
 				list->driver = new ProximitySensor(list);
 				sensor_proximity = *(list->sensor);
@@ -477,6 +477,12 @@ int NativeSensorManager::getDataInfo() {
 				has_gyro = 1;
 				list->driver = new GyroSensor(list);
 				sensor_gyro = *(list->sensor);
+				break;
+			case SENSOR_TYPE_PRESSURE:
+				list->driver = new PressureSensor(list);
+				break;
+			case SENSOR_TYPE_SIGNIFICANT_MOTION:
+				list->driver = new SmdSensor(list);
 				break;
 			default:
 				list->driver = NULL;
@@ -916,7 +922,7 @@ int NativeSensorManager::activate(int handle, int enable)
 		return -EINVAL;
 	}
 
-	//list->enable = enable;
+	list->enable = enable;
 
 	/* one shot sensors don't act as base sensors */
 	if (list->sensor->flags & SENSOR_FLAG_ONE_SHOT_MODE)
@@ -926,7 +932,8 @@ int NativeSensorManager::activate(int handle, int enable)
 	list_for_each(node, &list->dep_list) {
 		item = node_to_item(node, struct SensorRefMap, list);
 		if (enable) {
-			
+			registerListener(item->ctx, list);
+
 #if defined(SENSORS_DEVICE_API_VERSION_1_3)
 			/* HAL 1.3 already set listener's delay and latency
 			 * Sync it right now to make it take effect.
@@ -936,10 +943,7 @@ int NativeSensorManager::activate(int handle, int enable)
 
 			/* Enable the background sensor and register a listener on it. */
 			ALOGD("%s calling driver enable", item->ctx->sensor->name);
-			err = item->ctx->driver->enable(item->ctx->sensor->handle, 1);
-			if (!err) {
-				registerListener(item->ctx, list);
-  			}
+			item->ctx->driver->enable(item->ctx->sensor->handle, 1);
 			syncDelay(item->ctx->sensor->handle);
 
 		} else {
@@ -972,7 +976,7 @@ int NativeSensorManager::activate(int handle, int enable)
 		ALOGD("%s calling driver %s", list->sensor->name, enable ? "enable" : "disable");
 		list->driver->enable(handle, enable);
 	}
-    list->enable = enable;
+
 	return err;
 }
 
@@ -1172,7 +1176,7 @@ int NativeSensorManager::flush(int handle)
 	struct SensorRefMap *item;
 	struct listnode *node;
 
-	ALOGD("flush called\n", handle);
+	ALOGD("flush called:%d\n", handle);
 	list = getInfoByHandle(handle);
 	if (list == NULL) {
 		ALOGE("Invalid handle(%d)", handle);

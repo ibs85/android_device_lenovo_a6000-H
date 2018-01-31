@@ -41,7 +41,6 @@ __BEGIN_DECLS
 #define ORIENTATION_NAME	"orientation"
 #define GYROSCOPE_NAME		"gyroscope"
 #define LIGHT_NAME		"light"
-#define PRESSURE_NAME		"pressure"
 #define TEMPERATURE_NAME	"temperature"
 #define PROXIMITY_NAME		"proximity"
 #define GRAVITY_NAME		"gravity"

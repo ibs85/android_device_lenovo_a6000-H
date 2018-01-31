@@ -171,7 +171,6 @@ int ProximitySensor::enable(int32_t, int en) {
             ALOGE("invalid sensor index:%d\n", sensor_index);
             return -1;
         }
-
         fd = open(input_sysfs_path, O_RDWR);
         if (fd >= 0) {
             char buf[2];
@@ -184,11 +183,14 @@ int ProximitySensor::enable(int32_t, int en) {
             write(fd, buf, sizeof(buf));
             close(fd);
             mEnabled = flags;
-             return 0;
+            return 0;
         } else {
             ALOGE("open %s failed.(%s)\n", input_sysfs_path, strerror(errno));
             return -1;
         }
+    } else if (flags) {
+            mHasPendingEvent = true;
+    }
     return 0;
 }
 
@@ -232,11 +234,25 @@ int ProximitySensor::readEvents(sensors_event_t* data, int count)
                 }
             }
         } else if (type == EV_SYN) {
-           mPendingEvent.timestamp = timevalToNano(event->time);
-             if (mEnabled) {
-                 *data++ = mPendingEvent;
-                 count--;
-                 numEventReceived++;
+                switch ( event->code ) {
+                        case SYN_TIME_SEC:
+                                mUseAbsTimeStamp = true;
+                                report_time = event->value * 1000000000LL;
+                                break;
+                        case SYN_TIME_NSEC:
+                                mUseAbsTimeStamp = true;
+                                mPendingEvent.timestamp = report_time + event->value;
+                                break;
+                        case SYN_REPORT:
+                                if(mUseAbsTimeStamp != true) {
+                                        mPendingEvent.timestamp = timevalToNano(event->time);
+                                }
+                                if (mEnabled) {
+                                        *data++ = mPendingEvent;
+                                        count--;
+                                        numEventReceived++;
+                                }
+                                break;
                 }
         } else {
             ALOGE("ProximitySensor: unknown event (type=%d, code=%d)",
@@ -248,12 +264,44 @@ int ProximitySensor::readEvents(sensors_event_t* data, int count)
     return numEventReceived;
 }
 
+int ProximitySensor::setDelay(int32_t, int64_t ns)
+{
+        int fd;
+        char propBuf[PROPERTY_VALUE_MAX];
+        char buf[80];
+        int len;
+
+        property_get("sensors.light.loopback", propBuf, "0");
+        if (strcmp(propBuf, "1") == 0) {
+                ALOGE("sensors.light.loopback is set");
+                return 0;
+        }
+        int delay_ms = ns / 1000000;
+        strlcpy(&input_sysfs_path[input_sysfs_path_len],
+                        SYSFS_POLL_DELAY, SYSFS_MAXLEN);
+        fd = open(input_sysfs_path, O_RDWR);
+        if (fd < 0) {
+                ALOGE("open %s failed.(%s)\n", input_sysfs_path, strerror(errno));
+                return -1;
+        }
+        snprintf(buf, sizeof(buf), "%d", delay_ms);
+        len = write(fd, buf, ssize_t(strlen(buf)+1));
+        if (len < ssize_t(strlen(buf) + 1)) {
+                ALOGE("write %s failed\n", buf);
+                close(fd);
+                return -1;
+        }
+
+        close(fd);
+        return 0;
+}
+
 float ProximitySensor::indexToValue(size_t index) const
 {
     return index * res;
 }
 
-int ProximitySensor::calibrate(int32_t handle, struct cal_cmd_t *para,
+int ProximitySensor::calibrate(int32_t, struct cal_cmd_t *para,
                 struct cal_result_t *cal_result)
 {
     int fd;
@@ -306,19 +354,19 @@ int ProximitySensor::calibrate(int32_t handle, struct cal_cmd_t *para,
     }
     close(fd);
     if (para->axis == AXIS_THRESHOLD_H) {
-        mThreshold_h = strtol(temp[0], &endptr, 10);
+        mThreshold_h = strtol(temp[0], &endptr, 0);
         if (endptr == temp[0]) {
             ALOGE("No digits were found\n");
             return -1;
         }
     } else if (para->axis == AXIS_THRESHOLD_L) {
-        mThreshold_l = strtol(temp[1], &endptr, 10);
+        mThreshold_l = strtol(temp[1], &endptr, 0);
         if (endptr == temp[1]) {
             ALOGE("No digits were found\n");
             return -1;
         }
     } else if (para->axis == AXIS_BIAS) {
-        mBias = strtol(temp[2], &endptr, 10);
+        mBias = strtol(temp[2], &endptr, 0);
         if (endptr == temp[2]) {
             ALOGE("No digits were found\n");
             return -1;
@@ -330,7 +378,7 @@ int ProximitySensor::calibrate(int32_t handle, struct cal_cmd_t *para,
     return 0;
 }
 
-int ProximitySensor::initCalibrate(int32_t handle, struct cal_result_t *cal_result)
+int ProximitySensor::initCalibrate(int32_t, struct cal_result_t *cal_result)
 {
         int fd , i, err;
         char buf[LENGTH];

@@ -50,7 +50,7 @@
 
 AccelSensor::AccelSensor()
 	: SensorBase(NULL, "accelerometer"),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -65,13 +65,21 @@ AccelSensor::AccelSensor()
 		strlcat(input_sysfs_path, input_name, sizeof(input_sysfs_path));
 		strlcat(input_sysfs_path, SYSFS_I2C_SLAVE_PATH, sizeof(input_sysfs_path));
 		input_sysfs_path_len = strlen(input_sysfs_path);
+#ifdef TARGET_8610
+		if (access(input_sysfs_path, F_OK)) {
+			input_sysfs_path_len -= strlen(SYSFS_I2C_SLAVE_PATH);
+			strlcpy(&input_sysfs_path[input_sysfs_path_len],
+					SYSFS_INPUT_DEV_PATH, SYSFS_MAXLEN);
+			input_sysfs_path_len += strlen(SYSFS_INPUT_DEV_PATH);
+		}
+#endif
 		enable(0, 1);
 	}
 }
 
 AccelSensor::AccelSensor(char *name)
 	: SensorBase(NULL, "accelerometer"),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -93,7 +101,7 @@ AccelSensor::AccelSensor(char *name)
 
 AccelSensor::AccelSensor(SensorContext *context)
 	: SensorBase(NULL, NULL, context),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -238,15 +246,14 @@ again:
 					break;
 				case SYN_REPORT:
 					{
-						if (mEnabled && mUseAbsTimeStamp) {
-	  						if(mPendingEvent.timestamp >= mEnabledTime) {
+						if(mUseAbsTimeStamp != true) {
+							mPendingEvent.timestamp = timevalToNano(event->time);
+						}
+						mPendingEvent.timestamp -= sysclk_sync_offset;
+						if (mEnabled) {
 							*data++ = mPendingEvent;
 							numEventReceived++;
- 							}
-						count--;												
-						mUseAbsTimeStamp = false;
- 						} else {
-							ALOGE_IF(!mUseAbsTimeStamp, "AccelSensor:timestamp not received");
+							count--;
 						}
 					}
 					break;

@@ -47,7 +47,7 @@
 
 GyroSensor::GyroSensor()
 	: SensorBase(NULL, GYRO_INPUT_DEV_NAME),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -60,7 +60,11 @@ GyroSensor::GyroSensor()
 	if (data_fd) {
 		strlcpy(input_sysfs_path, "/sys/class/input/", sizeof(input_sysfs_path));
 		strlcat(input_sysfs_path, input_name, sizeof(input_sysfs_path));
+#ifdef TARGET_8610
+		strlcat(input_sysfs_path, "/device/", sizeof(input_sysfs_path));
+#else
 		strlcat(input_sysfs_path, "/device/device/", sizeof(input_sysfs_path));
+#endif
 		input_sysfs_path_len = strlen(input_sysfs_path);
 		enable(0, 1);
 	}
@@ -68,7 +72,7 @@ GyroSensor::GyroSensor()
 
 GyroSensor::GyroSensor(struct SensorContext *context)
 	: SensorBase(NULL, NULL, context),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -90,7 +94,7 @@ GyroSensor::GyroSensor(struct SensorContext *context)
 
 GyroSensor::GyroSensor(char *name)
 	: SensorBase(NULL, GYRO_INPUT_DEV_NAME),
-	  mInputReader(6),
+	  mInputReader(4),
 	  mHasPendingEvent(false),
 	  mEnabledTime(0)
 {
@@ -254,24 +258,49 @@ again:
 					}
 				break;
 				case SYN_REPORT:
-					{
-					if (mEnabled && mUseAbsTimeStamp) {
-						if(mPendingEvent.timestamp >= mEnabledTime) {
-  						*data++ = mPendingEvent;
-						numEventReceived++;
+					if(mUseAbsTimeStamp != true) {
+						mPendingEvent.timestamp = timevalToNano(event->time);
 					}
-					count--;
- 					mUseAbsTimeStamp = false;
-						} else {
-						ALOGE_IF(!mUseAbsTimeStamp, "GyroSensor:timestamp not received");
+					if (!mEnabled) {
+						break;
+					}
+
+					mPendingEvent.timestamp -= sysclk_sync_offset;
+					raw = mPendingEvent;
+					if (algo != NULL) {
+						if (algo->methods->convert(&raw, &result, NULL)) {
+							ALOGE("Calibrated failed\n");
+							result = raw;
 						}
-				}
-			break;
+					} else {
+						result = raw;
+					}
+					*data = result;
+					data->version = sizeof(sensors_event_t);
+					data->sensor = mPendingEvent.sensor;
+					data->type = SENSOR_TYPE_GYROSCOPE;
+					data->timestamp = mPendingEvent.timestamp;
+					/* The raw data is stored inside sensors_event_t.data after
+					 * sensors_event_t.gyroscope. Notice that the raw data is
+					 * required to composite the virtual sensor uncalibrated
+					 * gyroscope field sensor.
+					 *
+					 * data[0~2]: calibrated gyroscope field data.
+					 * data[3]: gyroscope field data accuracy.
+					 * data[4~6]: uncalibrated gyroscope field data.
+					 */
+					data->data[4] = mPendingEvent.data[0];
+					data->data[5] = mPendingEvent.data[1];
+					data->data[6] = mPendingEvent.data[2];
+					data++;
+					numEventReceived++;
+					count--;
+				break;
 			}
 		} else {
- 			ALOGE("GyroSensor: unknown event (type=%d, code=%d)",
- 					type, event->code);
- 		}
+			ALOGE("GyroSensor: unknown event (type=%d, code=%d)",
+					type, event->code);
+		}
 		mInputReader.next();
 	}
 

@@ -39,7 +39,6 @@ __BEGIN_DECLS
 #define SENSORS_LIGHT_HANDLE			3
 #define SENSORS_PROXIMITY_HANDLE		4
 #define SENSORS_GYROSCOPE_HANDLE		5
-#define SENSORS_PRESSURE_HANDLE			6
 
 #define SENSOR_TYPE_POCKET			(SENSOR_TYPE_DEVICE_PRIVATE_BASE + 1)
 
@@ -80,7 +79,6 @@ __BEGIN_DECLS
 #define ORIENTATION_NAME	"orientation"
 #define GYROSCOPE_NAME		"gyroscope"
 #define LIGHT_NAME		"light"
-#define PRESSURE_NAME		"pressure"
 #define TEMPERATURE_NAME	"temperature"
 #define PROXIMITY_NAME		"proximity"
 #define GRAVITY_NAME		"gravity"
@@ -103,7 +101,8 @@ __BEGIN_DECLS
 		(1ULL << SENSOR_TYPE_MAGNETIC_FIELD) | \
 		(1ULL << SENSOR_TYPE_PROXIMITY) | \
 		(1ULL << SENSOR_TYPE_LIGHT) | \
-		(1ULL << SENSOR_TYPE_GYROSCOPE))
+		(1ULL << SENSOR_TYPE_GYROSCOPE ) | \
+		(1ULL << SENSOR_TYPE_SIGNIFICANT_MOTION))
 
 
 /*****************************************************************************/
@@ -121,8 +120,6 @@ static inline const char* type_to_name(int type)
 			return GYROSCOPE_NAME;
 		case SENSOR_TYPE_LIGHT:
 			return LIGHT_NAME;
-		case SENSOR_TYPE_PRESSURE:
-			return PRESSURE_NAME;
 		case SENSOR_TYPE_TEMPERATURE:
 			return TEMPERATURE_NAME;
 		case SENSOR_TYPE_PROXIMITY:
